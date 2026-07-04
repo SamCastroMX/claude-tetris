@@ -1,0 +1,65 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          prompt: |
+            Analiza el issue #${{ github.event.issue.number }} de este repositorio (un juego de Tetris
+            en JavaScript vanilla — consulta CLAUDE.md para entender la arquitectura de game.js antes
+            de diagnosticar).
+
+            Tu tarea:
+
+            1. Lee el título y cuerpo del issue con
+               `gh issue view ${{ github.event.issue.number }} --json title,body,labels,comments`.
+
+            2. Etiqueta el issue usando únicamente labels ya existentes en el repo (consulta
+               `gh label list` primero): bug, documentation, duplicate, enhancement,
+               good first issue, help wanted, invalid, question, wontfix. Añade o quita labels con
+               `gh issue edit ${{ github.event.issue.number }} --add-label "..."` /
+               `--remove-label "..."` según corresponda. No crees labels nuevas. Si ninguna label
+               existente encaja bien, dilo en el comentario de diagnóstico en vez de forzar una.
+
+            3. Publica (o actualiza) un comentario de diagnóstico técnico que sirva de base para
+               implementar la solución después. Debe incluir:
+               - Resumen de una línea del problema o petición.
+               - La(s) mecánica(s) del juego involucradas según CLAUDE.md (tablero/colisión,
+                 piezas/rotación, wall kicks, game loop/drop, line clearing, scoring/nivel,
+                 ghost piece, spawn/game over) y qué función(es) de game.js probablemente haya
+                 que tocar.
+               - Pasos sugeridos de reproducción (si es un bug) o de implementación (si es una
+                 petición de feature).
+               - Ambigüedades o información faltante que debería aclarar quien reportó el issue.
+
+            4. Antes de comentar, revisa si ya existe un comentario tuyo anterior en este issue que
+               empiece con el marcador HTML `<!-- claude-triage -->` (usa el JSON de comments del
+               paso 1). Si existe, actualízalo con
+               `gh issue comment ${{ github.event.issue.number }} --edit-last` en vez de crear uno
+               nuevo. Si no existe, crea un comentario nuevo con `gh issue comment` que empiece con
+               ese marcador (en un comentario HTML, invisible al renderizar) para poder identificarlo
+               en ediciones futuras del issue.
+
+            No modifiques el título ni el cuerpo del issue, y no lo cierres. Limítate a labels y al
+            comentario de diagnóstico.
+
+          claude_args: '--allowed-tools "Bash(gh issue view *)" "Bash(gh issue edit *)" "Bash(gh issue comment *)" "Bash(gh label list *)"'
