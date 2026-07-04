@@ -13,6 +13,11 @@ const COLORS = [
   '#e57373', // Z - red
   '#7986cb', // J - indigo
   '#ffb74d', // L - orange
+  '#f06292', // + (plus) pentomino - pink
+  '#4db6ac', // U pentomino - teal
+  '#ff8a65', // Y pentomino - peach
+  '#fff176', // single block - gold (Tetris reward)
+  '#90a4ae', // hollow 3x3 - blue-grey (challenge)
 ];
 
 const PIECES = [
@@ -24,7 +29,20 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[0,8,0],[8,8,8],[0,8,0]],                  // + pentomino
+  [[9,0,9],[9,9,9]],                           // U pentomino
+  [[0,10],[10,10],[0,10],[0,10]],             // Y pentomino
+  [[11]],                                      // single block (Tetris reward)
+  [[12,12,12],[12,0,12],[12,12,12]],          // hollow 3x3 (challenge)
 ];
+
+// Regular tetrominoes make up most of the sequence; these occasionally
+// appear instead. The single block is never drawn at random - it is only
+// awarded via SINGLE_TYPE right after a Tetris (see clearLines/spawn).
+const NORMAL_TYPE_COUNT = 7;
+const SPECIAL_TYPES = [8, 9, 10, 12];
+const SPECIAL_CHANCE = 0.12;
+const SINGLE_TYPE = 11;
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
@@ -40,14 +58,21 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 
-let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId, rewardPending;
 
 function createBoard() {
   return Array.from({ length: ROWS }, () => new Array(COLS).fill(0));
 }
 
-function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+function randomPiece(forcedType) {
+  let type;
+  if (forcedType) {
+    type = forcedType;
+  } else if (Math.random() < SPECIAL_CHANCE) {
+    type = SPECIAL_TYPES[Math.floor(Math.random() * SPECIAL_TYPES.length)];
+  } else {
+    type = Math.floor(Math.random() * NORMAL_TYPE_COUNT) + 1;
+  }
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -108,6 +133,7 @@ function clearLines() {
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    if (cleared === 4) rewardPending = true;
     updateHUD();
   }
 }
@@ -143,7 +169,8 @@ function lockPiece() {
 
 function spawn() {
   current = next;
-  next = randomPiece();
+  next = randomPiece(rewardPending ? SINGLE_TYPE : undefined);
+  rewardPending = false;
   if (collide(current.shape, current.x, current.y)) {
     endGame();
   }
@@ -264,6 +291,7 @@ function init() {
   level = 1;
   paused = false;
   gameOver = false;
+  rewardPending = false;
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
